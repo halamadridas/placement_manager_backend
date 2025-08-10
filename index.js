@@ -11,11 +11,19 @@ dotenv.config()
 const app = express();
 const PORT = process.env.PORT || 4000;
 const GOOGLE_SCRIPT_URL =
-  process.env.GOOGLE_SCRIPT_URL || "YOUR_GOOGLE_SCRIPT_DEPLOYED_URL";
+  process.env.GOOGLE_SCRIPT_URL || "YOUR_NEW_DEPLOYMENT_URL_HERE";
+
+const STUDENT_SUBMISSION_SCRIPT = process.env.STUDENT_SUBMISSION_SCRIPT || "";
+
+console.log("🔍 GOOGLE_SCRIPT_URL:", GOOGLE_SCRIPT_URL);
+console.log("🔍 STUDENT_SUBMISSION_SCRIPT:", STUDENT_SUBMISSION_SCRIPT);
+
 
 // Middleware
 app.use(express.json());
 app.use(cors()); // Handles CORS automatically
+
+
 
 // Health check route
 app.get("/", (req, res) => {
@@ -35,6 +43,8 @@ app.post("/api/insert-rows", async (req, res) => {
     // Try to parse as JSON, fallback to text if not JSON
     let data;
     const text = await response.text();
+
+    
     try {
       data = JSON.parse(text);
     } catch {
@@ -43,6 +53,203 @@ app.post("/api/insert-rows", async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error("❌ Proxy error:", err);
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
+// Student form submission endpoint
+app.post("/api/student-submission", async (req, res) => {
+  try {
+    console.log("🔍 Received student submission request");
+    console.log("🔍 Request body:", JSON.stringify(req.body, null, 2));
+    
+    const { action, studentData } = req.body;
+    
+    // Validate that we have the required fields
+    if (!action || !studentData || !Array.isArray(studentData)) {
+      console.log("❌ Validation failed - Invalid payload format");
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid payload format. Expected {action, studentData: array}' 
+      });
+    }
+
+    // Validate that studentData has the minimum required fields
+    if (studentData.length < 6) {
+      console.log("❌ Validation failed - Array too short");
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Student data array must have at least 6 elements (registration, name, company, course, phone, email)' 
+      });
+    }
+
+    console.log("✅ Validation passed, forwarding to Google Apps Script");
+    console.log("🔍 Forwarding payload:", JSON.stringify(req.body, null, 2));
+
+    // Forward the payload to the Google Apps Script endpoint
+    const response = await fetch(STUDENT_SUBMISSION_SCRIPT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req.body),
+    });
+
+    // Try to parse as JSON, fallback to text if not JSON
+    let data;
+    const text = await response.text();
+    console.log("🔍 Google Apps Script response:", text);
+    
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+    
+    console.log("🔍 Final response data:", JSON.stringify(data, null, 2));
+    res.json(data);
+  } catch (err) {
+    console.error("❌ Student submission error:", err);
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
+// Get existing students endpoint
+app.get("/api/students", async (req, res) => {
+  try {
+    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getStudents`);
+    const result = await response.json();
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || "Failed to fetch students" 
+      });
+    }
+  } catch (err) {
+    console.error("❌ Get students error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.toString() 
+    });
+  }
+});
+
+// Check if student exists endpoint
+app.get("/api/check-student/:registrationNumber", async (req, res) => {
+  try {
+    const { registrationNumber } = req.params;
+    const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=checkStudentExists&registrationNumber=${registrationNumber}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || "Failed to check student" 
+      });
+    }
+  } catch (err) {
+    console.error("❌ Check student error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.toString() 
+    });
+  }
+});
+
+// Get companies endpoint
+app.get("/api/companies", async (req, res) => {
+  try {
+    const response = await fetch(`${STUDENT_SUBMISSION_SCRIPT}?action=getCompanies`);
+    const result = await response.json();
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || "Failed to fetch companies" 
+      });
+    }
+  } catch (err) {
+    console.error("❌ Get companies error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.toString() 
+    });
+  }
+});
+
+// Get students by company endpoint
+app.get("/api/students/company/:companyName", async (req, res) => {
+  try {
+    const { companyName } = req.params;
+    const response = await fetch(`${STUDENT_SUBMISSION_SCRIPT}?action=getStudentsByCompany&company=${encodeURIComponent(companyName)}`);
+    const result = await response.json();
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        error: result.error || "Failed to fetch students by company" 
+      });
+    }
+  } catch (err) {
+    console.error("❌ Get students by company error:", err);
+    res.status(500).json({ 
+      success: false, 
+      error: err.toString() 
+    });
+  }
+});
+
+// Verify student endpoint
+app.post("/api/verify-student", async (req, res) => {
+  try {
+    console.log("🔍 Received student verification request");
+    console.log("🔍 Request body:", JSON.stringify(req.body, null, 2));
+    
+    const { verificationData } = req.body;
+    
+    // Validate that we have the required fields
+    if (!verificationData || !verificationData.registrationNumber) {
+      console.log("❌ Validation failed - Missing verification data");
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing verification data. Required: registrationNumber' 
+      });
+    }
+
+    console.log("✅ Validation passed, forwarding to Google Apps Script");
+
+    // Forward the payload to the Google Apps Script endpoint
+    const response = await fetch(STUDENT_SUBMISSION_SCRIPT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "verifyStudent",
+        verificationData: verificationData
+      }),
+    });
+
+    // Try to parse as JSON, fallback to text if not JSON
+    let data;
+    const text = await response.text();
+    console.log("🔍 Google Apps Script response:", text);
+    
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+    
+    console.log("🔍 Final response data:", JSON.stringify(data, null, 2));
+    res.json(data);
+  } catch (err) {
+    console.error("❌ Student verification error:", err);
     res.status(500).json({ error: err.toString() });
   }
 });
