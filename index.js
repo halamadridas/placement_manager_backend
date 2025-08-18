@@ -57,61 +57,73 @@ app.post("/api/insert-rows", async (req, res) => {
   }
 });
 
-// Student form submission endpoint
-app.post("/api/student-submission", async (req, res) => {
-  try {
-    console.log("🔍 Received student submission request");
-    console.log("🔍 Request body:", JSON.stringify(req.body, null, 2));
+// Student form submission endpoint 
+app.post("/api/student-submission", async (req, res) => { 
+  try { 
+    console.log("🔍 Received student submission request"); 
+    console.log("🔍 Request body:", JSON.stringify(req.body, null, 2)); 
+     
+    const submissionData = req.body;
     
-    const { action, studentData } = req.body;
-    
-    // Validate that we have the required fields
-    if (!action || !studentData || !Array.isArray(studentData)) {
-      console.log("❌ Validation failed - Invalid payload format");
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Invalid payload format. Expected {action, studentData: array}' 
-      });
-    }
+    // Validate that we have the required fields 
+    if (!submissionData.registrationNumber || !submissionData.name) { 
+      console.log("❌ Validation failed - Missing required fields"); 
+      return res.status(400).json({  
+        success: false,  
+        error: 'Missing required fields: registrationNumber and name are mandatory'  
+      }); 
+    } 
 
-    // Validate that studentData has the minimum required fields
-    if (studentData.length < 6) {
-      console.log("❌ Validation failed - Array too short");
-      return res.status(400).json({ 
-        success: false, 
-        error: 'Student data array must have at least 6 elements (registration, name, company, course, phone, email)' 
-      });
-    }
+    // Transform the object into the array format expected by Google Apps Script
+    const studentDataArray = [
+      submissionData.registrationNumber || '',
+      submissionData.name || '',
+      submissionData.company || '',
+      submissionData.course || '',
+      submissionData.phone || '',
+      submissionData.email || '',
+      submissionData.placementDate || '',
+      submissionData.package ? `${submissionData.package} LPA` : '',
+      submissionData.feedback || '',
+      submissionData.submissionDate || new Date().toISOString(),
+      'false', // Is Verified - default to false
+      'Pending' // Status - default to Pending
+    ];
 
-    console.log("✅ Validation passed, forwarding to Google Apps Script");
-    console.log("🔍 Forwarding payload:", JSON.stringify(req.body, null, 2));
-
-    // Forward the payload to the Google Apps Script endpoint
-    const response = await fetch(STUDENT_SUBMISSION_SCRIPT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
-
-    // Try to parse as JSON, fallback to text if not JSON
-    let data;
-    const text = await response.text();
-    console.log("🔍 Google Apps Script response:", text);
-    
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = { raw: text };
-    }
-    
-    console.log("🔍 Final response data:", JSON.stringify(data, null, 2));
-    res.json(data);
-  } catch (err) {
-    console.error("❌ Student submission error:", err);
-    res.status(500).json({ error: err.toString() });
-  }
+    // Create the payload expected by Google Apps Script
+    const payload = {
+      action: 'handleStudentSubmission', // This was missing!
+      studentData: studentDataArray
+    };
+ 
+    console.log("✅ Validation passed, forwarding to Google Apps Script"); 
+    console.log("🔍 Transformed payload:", JSON.stringify(payload, null, 2)); 
+ 
+    // Forward the payload to the Google Apps Script endpoint 
+    const response = await fetch(`${STUDENT_SUBMISSION_SCRIPT}?action=handleStudentSubmission`, { 
+      method: "POST", 
+      headers: { "Content-Type": "application/json" }, 
+      body: JSON.stringify(payload), // Send the transformed payload
+    }); 
+ 
+    // Try to parse as JSON, fallback to text if not JSON 
+    let data; 
+    const text = await response.text(); 
+    console.log("🔍 Google Apps Script response:", text); 
+     
+    try { 
+      data = JSON.parse(text); 
+    } catch { 
+      data = { raw: text }; 
+    } 
+     
+    console.log("🔍 Final response data:", JSON.stringify(data, null, 2)); 
+    res.json(data); 
+  } catch (err) { 
+    console.error("❌ Student submission error:", err); 
+    res.status(500).json({ error: err.toString() }); 
+  } 
 });
-
 // Get existing students endpoint
 app.get("/api/students", async (req, res) => {
   try {
