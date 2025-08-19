@@ -25,6 +25,8 @@ app.use(cors()); // Handles CORS automatically
 
 
 
+
+
 // Health check route
 app.get("/", (req, res) => {
   res.json({ status: "ok", message: "Proxy server is running" });
@@ -92,7 +94,7 @@ app.post("/api/student-submission", async (req, res) => {
 
     // Create the payload expected by Google Apps Script
     const payload = {
-      action: 'handleStudentSubmission', // This was missing!
+      action: 'addStudentSubmission', // CHANGED: This was 'handleStudentSubmission' before
       studentData: studentDataArray
     };
  
@@ -100,10 +102,11 @@ app.post("/api/student-submission", async (req, res) => {
     console.log("🔍 Transformed payload:", JSON.stringify(payload, null, 2)); 
  
     // Forward the payload to the Google Apps Script endpoint 
-    const response = await fetch(`${STUDENT_SUBMISSION_SCRIPT}?action=handleStudentSubmission`, { 
+    // REMOVED the query parameter since action is in the body
+    const response = await fetch(STUDENT_SUBMISSION_SCRIPT, { 
       method: "POST", 
       headers: { "Content-Type": "application/json" }, 
-      body: JSON.stringify(payload), // Send the transformed payload
+      body: JSON.stringify(payload),
     }); 
  
     // Try to parse as JSON, fallback to text if not JSON 
@@ -124,6 +127,7 @@ app.post("/api/student-submission", async (req, res) => {
     res.status(500).json({ error: err.toString() }); 
   } 
 });
+
 // Get existing students endpoint
 app.get("/api/students", async (req, res) => {
   try {
